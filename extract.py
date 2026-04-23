@@ -27,6 +27,7 @@ def delsys_csv_breakdown(delsys_csv):
 
     data = pd.read_csv(delsys_csv,header=5,skiprows=[6,7])
     data.columns = data.columns.str.lstrip()
+    data.columns = data.columns.str.replace(r"\.\d+$", "", regex=True)
 
     #make duplicate column names unique
     new_cols = []
