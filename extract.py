@@ -25,10 +25,14 @@ def delsys_csv_breakdown(delsys_csv):
             cf_new_cols.append(cf_col)
     config.columns = cf_new_cols
 
-    data = pd.read_csv(delsys_csv,header=5,skiprows=[6,7])
-    data.columns = data.columns.str.lstrip()
-    data.columns = data.columns.str.replace(r"\.\d+$", "", regex=True)
-
+    data = pd.read_csv(delsys_csv,header=5,skiprows=[6,7],index_col=False)
+    data.columns = (
+        data.columns
+        .astype(str)
+        .str.strip()
+        .str.replace(r"\s+", " ", regex=True)
+        .str.replace(r"\.\d+$", "", regex=True))
+    
     #make duplicate column names unique
     new_cols = []
     col_counts = {}
