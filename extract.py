@@ -1,12 +1,21 @@
 import pandas as pd
 import numpy as np
-from scipy.signal import butter, filtfilt
 import re
 
 def delsys_csv_breakdown(delsys_csv):
     """
     The Delsys csv needs read in in different parts and reworked to 
     make columns easily accessible. 
+    delsys_csv: path
+        the path to the csv file containing the delsys data
+
+    Returns
+    time: pd.DataFrame
+        the first two rows of the emg.csv containing the time and date of the recording
+    config: pd.DataFrame
+        the configuration information for the recording (units, sampling rate, etc.). Column names are made unique.
+    data: pd.DataFrame
+        the recorded data from delsys with cleaned column names and converted to numeric values.
     """
     time = pd.read_csv(delsys_csv, nrows = 2)
 
@@ -14,6 +23,8 @@ def delsys_csv_breakdown(delsys_csv):
     config.replace(" ", float("NaN"), inplace = True)
     config.dropna(axis = 1, inplace = True) # Just retain the columns that have units
     config = config
+
+    #make duplicate column names unique
     cf_new_cols = []
     cf_col_counts = {}
     for cf_col in config.columns:
@@ -52,66 +63,3 @@ def delsys_csv_breakdown(delsys_csv):
     data = data.dropna(how="all")
 
     return (time, config, data)
-
-def butter_bandpass_filter(signal, lowcut, highcut, fs, order = 4):
-    """""
-    Apply a 4th order butterworth bandpass filter
-
-    signal: array-like
-        input EMG signal
-    lowcut: float
-        low cutoff frequency Hz
-    highcut: float
-        high cutoff frequency Hz
-    fs: float
-        sampling frequency Hz
-    order: int
-        filter order (default = 4)
-
-    Returns
-    filtered_signal : ndarray
-    """
-    nyq = 0.5*fs
-    low = lowcut/nyq
-    high = highcut/nyq
-    b,a = butter(order, [low,high], btype = 'bandpass')
-    filtered_signal = filtfilt(b,a,signal)
-
-    return filtered_signal
-    
-
-def rms_smoothing(signal, win_size):
-    """
-    Compute RMS smoothing using a sliding window
-
-    signal : array-like
-        input EMG signal
-    win_size : int
-        window size in samples
-
-    Returns
-    rms : ndarray
-        rms smoothed signal
-    """
-
-    sq = signal**2
-    win = np.ones(win_size)/win_size
-
-    m_s = np.convolve(sq, win, mode='same')
-    rms = np.sqrt(m_s)
-
-    return rms
-
-def peak_normalization(signal):
-    """
-    Normalize each respective muscle by the peak EMG amplitude
-    
-    signal: array-like
-        pre-filtered and rectified EMG signal
-
-    Returns
-    norm_signal
-    """
-
-    peaks = np.max(signal)
-

@@ -38,7 +38,8 @@ int maxTargets = 120;
 
 void settings() {
   // Fullscreen option did not work so exact coordinates for this laptop used
-  size(950, 800, P3D);    // or fullScreen(OPENGL); if you prefer
+ // size(950, 800, P3D);    // or fullScreen(OPENGL); if you prefer
+ fullScreen(P3D,1);
 }
 
 void setup() {  // Stage size
@@ -52,17 +53,17 @@ void setup() {  // Stage size
   println(Serial.list());
   
   String matfilename = "mat_data_" + nf(month(),2) + nf(day(),2) + nf(year(),4) + "_" + nf(hour(),2) + "-" + nf(minute(),2) + ".csv";
-  String matsavefolder = "C:/Users/chaundymck/OneDrive - Indiana University/Documents/NDD_EMG/Data/Raw/mat_data/";
+  String matsavefolder = "C:/Users/chaundymck/Indiana University/[Sec-E] BL-Phys-NDD_EMG - Documents/NDD_EMG/Data/Raw/mat_data/";
   String matfilepath = matsavefolder + matfilename;
   MatOutput = createWriter(matfilepath);  
   
   String targetfilename = "target_data_" + nf(month(),2) + nf(day(),2) + nf(year(),4) + "_" + nf(hour(),2) + "-" + nf(minute(),2) + ".csv";
-  String targetsavefolder = "C:/Users/chaundymck/OneDrive - Indiana University/Documents/NDD_EMG/Data/Raw/target_data/";
+  String targetsavefolder = "C:/Users/chaundymck/Indiana University/[Sec-E] BL-Phys-NDD_EMG - Documents/NDD_EMG/Data/Raw/target_data/";
   String targetfilepath = targetsavefolder + targetfilename;
   TargetOutput = createWriter(targetfilepath); 
   TargetOutput.println("targetX,targetY,appearTime,hitX,hitY,hitTime");
   
-  myPort = new Serial(this, "COM12", 115200);
+  myPort = new Serial(this, Serial.list()[comPortIdx], 115200);
   myPort.write('A');
   for (int j = 0; j < num_cols; j++) {
         for (int i = 0; i < num_cols; i++) {

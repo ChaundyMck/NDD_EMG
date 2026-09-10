@@ -2,8 +2,8 @@
 import pandas as pd
 import glob
 import os
-import re
-from extract import delsys_csv_breakdown, butter_bandpass_filter, rms_smoothing
+from extract import delsys_csv_breakdown
+from preprocessing import butter_bandpass_filter, resamp
 
 initial_data_path = '/Users/clmckeev/Library/CloudStorage/OneDrive-IndianaUniversity/Documents/NDD_EMG/Data/Raw/All'
 final_data_path = '/Users/clmckeev/Library/CloudStorage/OneDrive-IndianaUniversity/Documents/NDD_EMG/Data/Final'
@@ -43,44 +43,66 @@ for subject_id in folders: #Collect recorded data of each participant
     for measurement in sensor_config.columns:
         info[measurement] = sensor_config.loc[0, measurement]
     pd.DataFrame(info)
-    info.to_csv(os.path.join(final_data_path,subject_id,'testing_info.csv'), index=False, header=True) #Save info file in indivsubject_iduals folder
+    info.to_csv(os.path.join(final_data_path,subject_id,'testing_info.csv'), index=False, header=True) #Save info file in individuals folder
 
     #Seperate all data into desired chunks
     #Standard is EMG_1_1 is Posterior Deltoid EMG_1_2 is Anterior Deltoid and the IMU_1 is on the acromion
     #EMG_2_1 is the Pronator Teres EMG_2_2 is Brachioradialus and IMU_2 is on the back of the hand
-    EMG_1 = delsys_data[['EMG 1 Time Series (s)', 'EMG 1 (mV)', 'EMG 2 (mV)']].dropna()
-    EMG_1.columns = ['Time', 'EMG1', 'EMG2']
-    EMG_1.to_csv(os.path.join(final_data_path,subject_id,'EMG_1_raw.csv'), index=False, header=True) 
-    Acc_1 = delsys_data[['ACC X Time Series (s)', 'ACC X (G)', 'ACC Y (G)', 'ACC Z (G)']].dropna()
-    Acc_1.columns = ['Time', 'X', 'Y', 'Z']
-    Acc_1.to_csv(os.path.join(final_data_path,subject_id,'Acc_1_raw.csv'), index=False, header=True) 
-    Gyro_1 = delsys_data[['GYRO X Time Series (s)', 'GYRO X (deg/s)', 'GYRO Y (deg/s)', 'GYRO Z (deg/s)']].dropna()
-    Gyro_1.columns = ['Time', 'X', 'Y', 'Z']
-    Gyro_1.to_csv(os.path.join(final_data_path,subject_id,'Gyro_1_raw.csv'), index=False, header=True) 
+    rawEMG_1 = delsys_data[['EMG 1 Time Series (s)', 'EMG 1 (mV)', 'EMG 2 (mV)']].dropna()
+    rawEMG_1.columns = ['Time', 'EMG1', 'EMG2']
+    rawEMG_1.to_csv(os.path.join(final_data_path,subject_id,'EMG_1_raw.csv'), index=False, header=True) 
+    rawAcc_1 = delsys_data[['ACC X Time Series (s)', 'ACC X (G)', 'ACC Y (G)', 'ACC Z (G)']].dropna()
+    rawAcc_1.columns = ['Time', 'X', 'Y', 'Z']
+    rawAcc_1.to_csv(os.path.join(final_data_path,subject_id,'Acc_1_raw.csv'), index=False, header=True) 
+    rawGyro_1 = delsys_data[['GYRO X Time Series (s)', 'GYRO X (deg/s)', 'GYRO Y (deg/s)', 'GYRO Z (deg/s)']].dropna()
+    rawGyro_1.columns = ['Time', 'X', 'Y', 'Z']
+    rawGyro_1.to_csv(os.path.join(final_data_path,subject_id,'Gyro_1_raw.csv'), index=False, header=True) 
 
-    EMG_2 = delsys_data[['EMG 1 Time Series (s) 2', 'EMG 1 (mV) 2', 'EMG 2 (mV) 2']].dropna()
-    EMG_2.columns = ['Time', 'EMG1', 'EMG2']
-    EMG_2.to_csv(os.path.join(final_data_path,subject_id,'EMG_2_raw.csv'), index=False, header=True) 
-    Acc_2 = delsys_data[['ACC X Time Series (s) 2', 'ACC X (G) 2', 'ACC Y (G) 2', 'ACC Z (G) 2']].dropna()
-    Acc_2.columns = ['Time', 'X', 'Y', 'Z']
-    Acc_2.to_csv(os.path.join(final_data_path,subject_id,'Acc_2_raw.csv'), index=False, header=True) 
-    Gyro_2 = delsys_data[['GYRO X Time Series (s) 2', 'GYRO X (deg/s) 2', 'GYRO Y (deg/s) 2', 'GYRO Z (deg/s) 2']].dropna()
-    Gyro_2.columns = ['Time', 'X', 'Y', 'Z']
-    Gyro_2.to_csv(os.path.join(final_data_path,subject_id,'Gyro_2_raw.csv'), index=False, header=True)
+    rawEMG_2 = delsys_data[['EMG 1 Time Series (s) 2', 'EMG 1 (mV) 2', 'EMG 2 (mV) 2']].dropna()
+    rawEMG_2.columns = ['Time', 'EMG1', 'EMG2']
+    rawEMG_2.to_csv(os.path.join(final_data_path,subject_id,'EMG_2_raw.csv'), index=False, header=True) 
+    rawAcc_2 = delsys_data[['ACC X Time Series (s) 2', 'ACC X (G) 2', 'ACC Y (G) 2', 'ACC Z (G) 2']].dropna()
+    rawAcc_2.columns = ['Time', 'X', 'Y', 'Z']
+    rawAcc_2.to_csv(os.path.join(final_data_path,subject_id,'Acc_2_raw.csv'), index=False, header=True) 
+    rawGyro_2 = delsys_data[['GYRO X Time Series (s) 2', 'GYRO X (deg/s) 2', 'GYRO Y (deg/s) 2', 'GYRO Z (deg/s) 2']].dropna()
+    rawGyro_2.columns = ['Time', 'X', 'Y', 'Z']
+    rawGyro_2.to_csv(os.path.join(final_data_path,subject_id,'Gyro_2_raw.csv'), index=False, header=True)
 
     Analog = delsys_data[ 'Analog_In_1 Time Series (s)',' Analog_In_1 (V)']
     Analog.columns = ['Time', 'Analog']
     Analog.to_csv(os.path.join(final_data_path,subject_id,'Analog.csv'), index=False, header=True)
 
 
-    ##Preprocessing data
-     #EMG Preprocessing
-    samp_freqEMG_1_1 = re.sub(r'[^0-9.]', '', info[' EMG 1 (mV)'])
+    ## Preprocessing data
+     # EMG data
+    samp_freqEMG = float(sensor_config.iloc[0, 0].split()[0])
+
+     # Resample to 1000 Hz
+    rsEMG_1 = resamp(rawEMG_1)
+    rsEMG_2 = resamp(rawEMG_2)
+
      # Apply a 4th order Butterworth bandpass (20-450Hz) using the sampling frequency from Delsys
-    filtEMG_1_1 = butter_bandpass_filter(EMG_1['EMG1'],20, 450, 1777, order = 4)
-    filtEMG_1_2 = butter_bandpass_filter(EMG_1['EMG2'],20, 450, 1777, order = 4)
-    filtEMG_2_1 = butter_bandpass_filter(EMG_2['EMG1'],20, 450, 1777, order = 4)
-    filtEMG_2_2 = butter_bandpass_filter(EMG_2['EMG2'],20, 450, 1777, order = 4)
+    filtEMG_1 = []
+    filtEMG_2 = []
+    filtEMG_1['Time'] = rsEMG_1['Time']
+    filtEMG_2['Time'] = rsEMG_2['Time']
+    filtEMG_1['EMG1'] = butter_bandpass_filter(rsEMG_1['EMG1'],20, 450, samp_freqEMG, order = 4)
+    filtEMG_1['EMG2'] = butter_bandpass_filter(rsEMG_1['EMG2'],20, 450, samp_freqEMG, order = 4)
+    filtEMG_2['EMG1'] = butter_bandpass_filter(rsEMG_2['EMG1'],20, 450, samp_freqEMG, order = 4)
+    filtEMG_2['EMG2'] = butter_bandpass_filter(rsEMG_2['EMG2'],20, 450, samp_freqEMG, order = 4)
+    
+     # Determine trial start and stop times and remove unsuccesful trials
+
+
+
+     # Normalize data using the maximum within trial measurement
+    EMG_1 = cleanEMG_1
+    EMG_2 = cleanEMG_2
+    EMG_1['EMG1'] = (EMG_1['EMG1']/EMG_1['EMG1'].max())
+    EMG_1['EMG2'] = (EMG_1['EMG2']/EMG_1['EMG2'].max())
+    EMG_2['EMG1'] = (EMG_2['EMG1']/EMG_2['EMG1'].max())
+    EMG_2['EMG2'] = (EMG_2['EMG2']/EMG_2['EMG2'].max())
+    
     
 
 
