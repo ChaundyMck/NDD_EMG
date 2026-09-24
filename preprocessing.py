@@ -83,7 +83,7 @@ def sync(analog_data, target_data, a_event_cutoff=0.01):
 
     Parameters:
     analog_data (pd.DataFrame): The DataFrame containing the analog data from delsys ['Time','Analog'].
-    target_data (pd.DataFrame): The DataFrame containing the target data from delsys ['Time','hitTime'].
+    target_data (pd.DataFrame): The DataFrame containing the target data from delsys ['hitTime'].
     a_event_cutoff (float): The cutoff value for identifying events in the analog data.
 
     Returns:
@@ -91,10 +91,29 @@ def sync(analog_data, target_data, a_event_cutoff=0.01):
     """
     
     # Identify the first event in the analog data that exceeds the cutoff, filtering does not change the time of the events.
-    a_event_time = analog_data[find_peaks(analog_data['Analog'], height=a_event_cutoff, distance = 100)]['Time']
+    peaks, _ = find_peaks(analog_data['Analog'], height=a_event_cutoff, distance = 100)
+    a_event_time = analog_data.loc[peaks]['Time'] 
     t_event_time = target_data['hitTime']/1000
     # Calculate the time difference between the two events, this gives the time difference for all delsys times to local computer time
     time_diff = a_event_time - t_event_time
     
 
     return time_diff
+
+
+def peak_normalization(EMG_signal):
+    """
+    Normalize the EMG signal based on the maximum value within the trial.
+
+    Parameters:
+    signal (pd.DataFrame): The DataFrame containing the EMG signal with columns ['Time', 'EMG1', 'EMG2'].
+
+    Returns:
+    pd.DataFrame: The normalized EMG signal.
+    """
+    
+    normalized_signal = EMG_signal.copy()
+    normalized_signal['EMG1'] = normalized_signal['EMG1'] / normalized_signal['EMG1'].max()
+    normalized_signal['EMG2'] = normalized_signal['EMG2'] / normalized_signal['EMG2'].max()
+
+    return normalized_signal

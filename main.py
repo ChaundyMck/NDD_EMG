@@ -3,7 +3,7 @@ import pandas as pd
 import glob
 import os
 from extract import delsys_csv_breakdown
-from preprocessing import butter_bandpass_filter, resamp
+from preprocessing import butter_bandpass_filter, resamp, sync
 
 initial_data_path = '/Users/clmckeev/Library/CloudStorage/OneDrive-IndianaUniversity/Documents/NDD_EMG/Data/Raw/All'
 final_data_path = '/Users/clmckeev/Library/CloudStorage/OneDrive-IndianaUniversity/Documents/NDD_EMG/Data/Final'
@@ -47,7 +47,7 @@ for subject_id in folders: #Collect recorded data of each participant
 
     #Seperate all data into desired chunks
     #Standard is EMG_1_1 is Posterior Deltoid EMG_1_2 is Anterior Deltoid and the IMU_1 is on the acromion
-    #EMG_2_1 is the Pronator Teres EMG_2_2 is Brachioradialus and IMU_2 is on the back of the hand
+    #EMG_2_1 is the IDF EMG_2_2 is Brachioradialus and IMU_2 is on the back of the hand
     rawEMG_1 = delsys_data[['EMG 1 Time Series (s)', 'EMG 1 (mV)', 'EMG 2 (mV)']].dropna()
     rawEMG_1.columns = ['Time', 'EMG1', 'EMG2']
     rawEMG_1.to_csv(os.path.join(final_data_path,subject_id,'EMG_1_raw.csv'), index=False, header=True) 
@@ -74,6 +74,11 @@ for subject_id in folders: #Collect recorded data of each participant
 
 
     ## Preprocessing data
+     # Sync analog and digital data
+    t_delay = sync(Analog, target_data, a_event_cutoff=0.01)
+    target_data['hitTime'] = pd.to_datetime(target_data['hitTime'], unit='s') + pd.to_timedelta(t_delay, unit='s')
+    mat_data['Time'] = pd.to_datetime(mat_data['Time'], unit='s') + pd.to_timedelta(t_delay, unit='s')
+
      # EMG data
     samp_freqEMG = float(sensor_config.iloc[0, 0].split()[0])
 
