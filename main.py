@@ -1,7 +1,9 @@
 #Will take input folders and output analyzed data
+from more_itertools import only
 import pandas as pd
 import glob
 import os
+from analysis import peak_analysis
 from extract import delsys_csv_breakdown
 from preprocessing import butter_bandpass_filter, resamp, sync
 
@@ -87,27 +89,41 @@ for subject_id in folders: #Collect recorded data of each participant
     rsEMG_2 = resamp(rawEMG_2)
 
      # Apply a 4th order Butterworth bandpass (20-450Hz) using the sampling frequency from Delsys
-    filtEMG_1 = []
-    filtEMG_2 = []
-    filtEMG_1['Time'] = rsEMG_1['Time']
-    filtEMG_2['Time'] = rsEMG_2['Time']
-    filtEMG_1['EMG1'] = butter_bandpass_filter(rsEMG_1['EMG1'],20, 450, samp_freqEMG, order = 4)
-    filtEMG_1['EMG2'] = butter_bandpass_filter(rsEMG_1['EMG2'],20, 450, samp_freqEMG, order = 4)
-    filtEMG_2['EMG1'] = butter_bandpass_filter(rsEMG_2['EMG1'],20, 450, samp_freqEMG, order = 4)
-    filtEMG_2['EMG2'] = butter_bandpass_filter(rsEMG_2['EMG2'],20, 450, samp_freqEMG, order = 4)
+    EMG_1 = []
+    EMG_2 = []
+    EMG_1['Time'] = rsEMG_1['Time']
+    EMG_2['Time'] = rsEMG_2['Time']
+    EMG_1['EMG1'] = butter_bandpass_filter(rsEMG_1['EMG1'],20, 450, samp_freqEMG, order = 4)
+    EMG_1['EMG2'] = butter_bandpass_filter(rsEMG_1['EMG2'],20, 450, samp_freqEMG, order = 4)
+    EMG_2['EMG1'] = butter_bandpass_filter(rsEMG_2['EMG1'],20, 450, samp_freqEMG, order = 4)
+    EMG_2['EMG2'] = butter_bandpass_filter(rsEMG_2['EMG2'],20, 450, samp_freqEMG, order = 4)
     
      # Determine trial start and stop times and remove unsuccesful trials
-
+    start_times = 
+    stop_times = 
+    cleanEMG_1 = #data only between start and stop times (only used for normalization, should not be used for any analyasis)
 
 
      # Normalize data using the maximum within trial measurement
-    EMG_1 = cleanEMG_1
-    EMG_2 = cleanEMG_2
-    EMG_1['EMG1'] = (EMG_1['EMG1']/EMG_1['EMG1'].max())
-    EMG_1['EMG2'] = (EMG_1['EMG2']/EMG_1['EMG2'].max())
-    EMG_2['EMG1'] = (EMG_2['EMG1']/EMG_2['EMG1'].max())
-    EMG_2['EMG2'] = (EMG_2['EMG2']/EMG_2['EMG2'].max())
     
+    EMG_1['EMG1'] = EMG_1['EMG1']/(cleanEMG_1['EMG1'].max())
+    EMG_1['EMG2'] = EMG_1['EMG2']/(cleanEMG_1['EMG2'].max())
+    EMG_2['EMG1'] = EMG_2['EMG1']/(cleanEMG_2['EMG1'].max())
+    EMG_2['EMG2'] = EMG_2['EMG2']/(cleanEMG_2['EMG2'].max())
+
     
+
+    ## Analysis
+
+     # change between subsequent maxima and minima within trials
+    EMG_11_amp_diff, EMG_11_time_diff = peak_analysis(start_times, stop_times, EMG_1[['Time', 'EMG1']])
+    EMG_12_amp_diff, EMG_12_time_diff = peak_analysis(start_times, stop_times, EMG_1[['Time', 'EMG2']])
+    EMG_21_amp_diff, EMG_21_time_diff = peak_analysis(start_times, stop_times, EMG_2[['Time', 'EMG1']])
+    EMG_22_amp_diff, EMG_22_time_diff = peak_analysis(start_times, stop_times, EMG_2[['Time', 'EMG2']])
+
+    EMG_11_amp_diff.to_csv(os.path.join(final_data_path,subject_id,'EMG_11_amp_diff.csv'), index=False, header=True)
+    EMG_12_amp_diff.to_csv(os.path.join(final_data_path,subject_id,'EMG_12_amp_diff.csv'), index=False, header=True)
+    EMG_21_amp_diff.to_csv(os.path.join(final_data_path,subject_id,'EMG_21_amp_diff.csv'), index=False, header=True)
+    EMG_22_amp_diff.to_csv(os.path.join(final_data_path,subject_id,'EMG_22_amp_diff.csv'), index=False, header=True)
 
 
