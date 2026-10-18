@@ -87,15 +87,21 @@ def sync(analog_data, target_data, a_event_cutoff=0.01):
     a_event_cutoff (float): The cutoff value for identifying events in the analog data.
 
     Returns:
-    pd.DataFrame: The adjusted target_data DataFrame with synchronized timestamps.
+    time_diff (float): The time difference between the synchronized events.
     """
     
     # Identify the first event in the analog data that exceeds the cutoff, filtering does not change the time of the events.
-    peaks, _ = find_peaks(analog_data['Analog'], height=a_event_cutoff, distance = 100)
-    a_event_time = analog_data.loc[peaks]['Time'] 
-    t_event_time = target_data['hitTime']/1000
+    analog = analog_data['Analog'].to_numpy(dtype=float)
+    peaks, _ = find_peaks(np.nan_to_num(analog), height=a_event_cutoff, distance = 100)
+    if len(peaks) == 0:
+        raise ValueError("No peaks found in the analog data that exceed the specified cutoff value.")
+    a_event_time = analog_data['Time'].iloc[peaks].dropna()
+    t_event_time = (target_data['hitTime']/1000).dropna()  # Convert milliseconds to seconds and drop NaN values
+    if a_event_time.empty or t_event_time.empty:
+        raise ValueError("No valid event times found in the analog or target data.")
+    
     # Calculate the time difference between the two events, this gives the time difference for all delsys times to local computer time
-    time_diff = a_event_time - t_event_time
+    time_diff = float(a_event_time.iloc[-1] - t_event_time.iloc[-1])
     
 
     return time_diff

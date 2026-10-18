@@ -1,6 +1,22 @@
 import pandas as pd
 import numpy as np
 import re
+from scipy.signal import find_peaks
+import glob
+import os
+import warnings
+
+class MissingFileError(Exception):
+    """Custom exception for missing files."""
+    pass
+
+def find_file(subject_dir, pattern):
+    matches = sorted(glob.glob(os.path.join(subject_dir, pattern)))
+    if not matches:
+        raise MissingFileError(f"no file matching '{pattern}' in {subject_dir}")
+    if len(matches) > 1:
+        warnings.warn(f"{len(matches)} files match '{pattern}' in {subject_dir}; using {matches[0]}")
+    return matches[0]
 
 def delsys_csv_breakdown(delsys_csv):
     """
@@ -63,3 +79,44 @@ def delsys_csv_breakdown(delsys_csv):
     data = data.dropna(how="all")
 
     return (time, config, data)
+
+
+def trial_determination(mat_data, target_data):
+    """
+    Determine the start and stop times for each trial based on the target data.
+
+    Parameters:
+    mat_data (pd.DataFrame): The DataFrame containing the mat data with columns.
+    target_data (pd.DataFrame): The DataFrame containing the target data with columns ['hitTime'].
+
+    Returns:
+    tuple: Two lists containing the start times and stop times for each trial.
+    """
+
+    start_times = []
+    stop_times = []
+    hit_times = []
+
+    mat_data['derivative'] = mat_data['Total'].diff()
+
+    start_ind, _ = find_peaks(-mat_data['derivative'], distance = 20, height = 300)
+    stop_ind, _ = find_peaks(mat_data['derivative'], distance = 20, height = 300)
+
+    starts = mat_data['Time'].iloc[start_ind]
+    stops = mat_data['Time'].iloc[stop_ind]
+
+    for i in range(len(target_data)):
+        hit_time = target_data['hitTime'].iloc[i]
+        nearest_start = starts[starts <= hit_time].max()
+        nearest_stop = stops[stops >= hit_time].min()
+    
+        if 0<i<len(target_data)-1:      #only consider trials that have their own start and stop times
+            next_hit_time = target_data['hitTime'].iloc[i+1]
+            previous_hit_time = target_data['hitTime'].iloc[i-1]
+            if bool(nearest_start >= previous_hit_time) and bool(nearest_stop <= next_hit_time):
+                start_times.append(nearest_start)
+                stop_times.append(nearest_stop)
+                hit_times.append(hit_time)
+          
+
+    return start_times, stop_times, hit_times

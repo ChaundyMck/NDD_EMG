@@ -4,21 +4,28 @@ import pandas as pd
 import glob
 import os
 from analysis import peak_analysis
-from extract import delsys_csv_breakdown
+from extract import delsys_csv_breakdown, trial_determination, MissingFileError, find_file
 from preprocessing import butter_bandpass_filter, resamp, sync
 
 initial_data_path = '/Users/clmckeev/Library/CloudStorage/OneDrive-IndianaUniversity/Documents/NDD_EMG/Data/Raw/All'
 final_data_path = '/Users/clmckeev/Library/CloudStorage/OneDrive-IndianaUniversity/Documents/NDD_EMG/Data/Final'
-folders = ['001','002'] #This line should be altered as needed
-
+folders = ['001','002', '003','004', '005', '006', '007', '008', '009', '010', '011', '012', '013', '014', '015', '016', '017', '018', '019', '020', '021', '022', '023', '024', '025', '026', '027', '028', '029', '030', '031','032','033','034','035','036','037','038','039'] #This line should be altered as needed
+required_files = {'EMG': '*emg.csv', 'Info': '*info.csv', 'Mat': 'mat*.csv', 'Target': 'target*.csv'}
 
 for subject_id in folders: #Collect recorded data of each participant
+    subject_dir = os.path.join(initial_data_path,subject_id)
+    end_subject_dir = os.path.join(final_data_path,subject_id)
+    os.makedirs(end_subject_dir, exist_ok=True, parents=True)
+    try: paths = {name:find_file(subject_dir, pattern) for name, pattern in required_files.items()}
+    except MissingFileError as e:
+        print(f"Skipping {subject_id} due to missing file: {e}")
+        continue
     info = []
-    (DT, sensor_config, delsys_data) = delsys_csv_breakdown(glob.glob(os.path.join(initial_data_path,subject_id,'*emg.csv'))[0])
+    (DT, sensor_config, delsys_data) = delsys_csv_breakdown(glob.glob(paths['EMG']))
     delsys_data.dropna()
-    p_data = pd.read_csv(glob.glob(os.path.join(initial_data_path,subject_id,'*info.csv'))[0])
-    mat_data = pd.read_csv(glob.glob(os.path.join(initial_data_path,subject_id,'mat*.csv'))[0])
-    target_data = pd.read_csv(glob.glob(os.path.join(initial_data_path,subject_id,'target*.csv'))[0])
+    p_data = pd.read_csv(glob.glob(paths['Info']))
+    mat_data = pd.read_csv(glob.glob(paths['Mat']))
+    target_data = pd.read_csv(glob.glob(paths['Target']))
 
                   
     #Collect all test info in one place
@@ -39,47 +46,49 @@ for subject_id in folders: #Collect recorded data of each participant
     info['ASD scale'] = p_data.loc['ASD scale', 0]
     info['ADHD scale A'] = p_data.loc['ADHD scale A', 0]
     info['ADHD scale total'] = p_data.loc['ADHD scale total', 0]
+    info['Active Medications'] = p_data.loc['Meds', 0]
+    info['Relatives'] = p_data.loc['Relatives', 0]
     info['Notes'] = p_data.loc['Notes', 0]
     
     info['Test Length'] = DT.iloc[1,1]
     for measurement in sensor_config.columns:
         info[measurement] = sensor_config.loc[0, measurement]
     pd.DataFrame(info)
-    info.to_csv(os.path.join(final_data_path,subject_id,'testing_info.csv'), index=False, header=True) #Save info file in individuals folder
+    info.to_csv(os.path.join(end_subject_dir,'testing_info.csv'), index=False, header=True) #Save info file in individuals folder
 
     #Seperate all data into desired chunks
     #Standard is EMG_1_1 is Posterior Deltoid EMG_1_2 is Anterior Deltoid and the IMU_1 is on the acromion
     #EMG_2_1 is the IDF EMG_2_2 is Brachioradialus and IMU_2 is on the back of the hand
     rawEMG_1 = delsys_data[['EMG 1 Time Series (s)', 'EMG 1 (mV)', 'EMG 2 (mV)']].dropna()
     rawEMG_1.columns = ['Time', 'EMG1', 'EMG2']
-    rawEMG_1.to_csv(os.path.join(final_data_path,subject_id,'EMG_1_raw.csv'), index=False, header=True) 
+    rawEMG_1.to_csv(os.path.join(end_subject_dir,'EMG_1_raw.csv'), index=False, header=True) 
     rawAcc_1 = delsys_data[['ACC X Time Series (s)', 'ACC X (G)', 'ACC Y (G)', 'ACC Z (G)']].dropna()
     rawAcc_1.columns = ['Time', 'X', 'Y', 'Z']
-    rawAcc_1.to_csv(os.path.join(final_data_path,subject_id,'Acc_1_raw.csv'), index=False, header=True) 
+    rawAcc_1.to_csv(os.path.join(end_subject_dir,'Acc_1_raw.csv'), index=False, header=True) 
     rawGyro_1 = delsys_data[['GYRO X Time Series (s)', 'GYRO X (deg/s)', 'GYRO Y (deg/s)', 'GYRO Z (deg/s)']].dropna()
     rawGyro_1.columns = ['Time', 'X', 'Y', 'Z']
-    rawGyro_1.to_csv(os.path.join(final_data_path,subject_id,'Gyro_1_raw.csv'), index=False, header=True) 
+    rawGyro_1.to_csv(os.path.join(end_subject_dir,'Gyro_1_raw.csv'), index=False, header=True) 
 
     rawEMG_2 = delsys_data[['EMG 1 Time Series (s) 2', 'EMG 1 (mV) 2', 'EMG 2 (mV) 2']].dropna()
     rawEMG_2.columns = ['Time', 'EMG1', 'EMG2']
-    rawEMG_2.to_csv(os.path.join(final_data_path,subject_id,'EMG_2_raw.csv'), index=False, header=True) 
+    rawEMG_2.to_csv(os.path.join(end_subject_dir,'EMG_2_raw.csv'), index=False, header=True) 
     rawAcc_2 = delsys_data[['ACC X Time Series (s) 2', 'ACC X (G) 2', 'ACC Y (G) 2', 'ACC Z (G) 2']].dropna()
     rawAcc_2.columns = ['Time', 'X', 'Y', 'Z']
-    rawAcc_2.to_csv(os.path.join(final_data_path,subject_id,'Acc_2_raw.csv'), index=False, header=True) 
+    rawAcc_2.to_csv(os.path.join(end_subject_dir,'Acc_2_raw.csv'), index=False, header=True) 
     rawGyro_2 = delsys_data[['GYRO X Time Series (s) 2', 'GYRO X (deg/s) 2', 'GYRO Y (deg/s) 2', 'GYRO Z (deg/s) 2']].dropna()
     rawGyro_2.columns = ['Time', 'X', 'Y', 'Z']
-    rawGyro_2.to_csv(os.path.join(final_data_path,subject_id,'Gyro_2_raw.csv'), index=False, header=True)
+    rawGyro_2.to_csv(os.path.join(end_subject_dir,'Gyro_2_raw.csv'), index=False, header=True)
 
     Analog = delsys_data[ 'Analog_In_1 Time Series (s)',' Analog_In_1 (V)']
     Analog.columns = ['Time', 'Analog']
-    Analog.to_csv(os.path.join(final_data_path,subject_id,'Analog.csv'), index=False, header=True)
+    Analog.to_csv(os.path.join(end_subject_dir,'Analog.csv'), index=False, header=True)
 
 
     ## Preprocessing data
      # Sync analog and digital data
     t_delay = sync(Analog, target_data, a_event_cutoff=0.01)
-    target_data['hitTime'] = pd.to_datetime(target_data['hitTime'], unit='s') + pd.to_timedelta(t_delay, unit='s')
-    mat_data['Time'] = pd.to_datetime(mat_data['Time'], unit='s') + pd.to_timedelta(t_delay, unit='s')
+    target_data['hitTime'] = (target_data['hitTime'] / 1000)  + t_delay
+    mat_data['Time'] = (mat_data['Time']/1000) + t_delay
 
      # EMG data
     samp_freqEMG = float(sensor_config.iloc[0, 0].split()[0])
@@ -89,20 +98,25 @@ for subject_id in folders: #Collect recorded data of each participant
     rsEMG_2 = resamp(rawEMG_2)
 
      # Apply a 4th order Butterworth bandpass (20-450Hz) using the sampling frequency from Delsys
-    EMG_1 = []
-    EMG_2 = []
-    EMG_1['Time'] = rsEMG_1['Time']
-    EMG_2['Time'] = rsEMG_2['Time']
-    EMG_1['EMG1'] = butter_bandpass_filter(rsEMG_1['EMG1'],20, 450, samp_freqEMG, order = 4)
-    EMG_1['EMG2'] = butter_bandpass_filter(rsEMG_1['EMG2'],20, 450, samp_freqEMG, order = 4)
-    EMG_2['EMG1'] = butter_bandpass_filter(rsEMG_2['EMG1'],20, 450, samp_freqEMG, order = 4)
-    EMG_2['EMG2'] = butter_bandpass_filter(rsEMG_2['EMG2'],20, 450, samp_freqEMG, order = 4)
+    filtEMG_1 = []
+    filtEMG_2 = []
+    filtEMG_1['Time'] = rsEMG_1['Time']
+    filtEMG_2['Time'] = rsEMG_2['Time']
+    filtEMG_1['EMG1'] = butter_bandpass_filter(rsEMG_1['EMG1'],20, 450, samp_freqEMG, order = 4)
+    filtEMG_1['EMG2'] = butter_bandpass_filter(rsEMG_1['EMG2'],20, 450, samp_freqEMG, order = 4)
+    filtEMG_2['EMG1'] = butter_bandpass_filter(rsEMG_2['EMG1'],20, 450, samp_freqEMG, order = 4)
+    filtEMG_2['EMG2'] = butter_bandpass_filter(rsEMG_2['EMG2'],20, 450, samp_freqEMG, order = 4)
     
-     # Determine trial start and stop times and remove unsuccesful trials
-    start_times = 
-    stop_times = 
-    cleanEMG_1 = #data only between start and stop times (only used for normalization, should not be used for any analysis)
+     # Determine trial start and stop times and remove unsuccesful trials, clean_EMG only includes data within the start and stop times of each trial
+    start_times, stop_times, hit_times = trial_determination(mat_data, target_data)
+    cleanEMG_1 = []
+    cleanEMG_2 = []
+    for i in range(len(start_times)):
+        cleanEMG_1.append(filtEMG_1[(filtEMG_1['Time'] >= start_times[i]) & (filtEMG_1['Time'] <= stop_times[i])])
+        cleanEMG_2.append(filtEMG_2[(filtEMG_2['Time'] >= start_times[i]) & (filtEMG_2['Time'] <= stop_times[i])])
 
+    EMG_1 = filtEMG_1[(filtEMG_1['Time'] >= start_times[0]) & (filtEMG_1['Time'] <= stop_times[-1])]
+    EMG_2 = filtEMG_2[(filtEMG_2['Time'] >= start_times[0]) & (filtEMG_2['Time'] <= stop_times[-1])]
 
      # Normalize data using the maximum within trial measurement
     
@@ -116,14 +130,14 @@ for subject_id in folders: #Collect recorded data of each participant
     ## Analysis
 
      # change between subsequent maxima and minima within trials
-    EMG_11_amp_diff, EMG_11_time_diff = peak_analysis(start_times, stop_times, EMG_1[['Time', 'EMG1']])
-    EMG_12_amp_diff, EMG_12_time_diff = peak_analysis(start_times, stop_times, EMG_1[['Time', 'EMG2']])
-    EMG_21_amp_diff, EMG_21_time_diff = peak_analysis(start_times, stop_times, EMG_2[['Time', 'EMG1']])
-    EMG_22_amp_diff, EMG_22_time_diff = peak_analysis(start_times, stop_times, EMG_2[['Time', 'EMG2']])
+    EMG_11_diff = peak_analysis(start_times, stop_times, EMG_1[['Time', 'EMG1']], save_path = os.path.join(end_subject_dir,'Graphs'))
+    EMG_12_diff = peak_analysis(start_times, stop_times, EMG_1[['Time', 'EMG2']], save_path = os.path.join(end_subject_dir,'Graphs'))
+    EMG_21_diff = peak_analysis(start_times, stop_times, EMG_2[['Time', 'EMG1']], save_path = os.path.join(end_subject_dir,'Graphs'))
+    EMG_22_diff = peak_analysis(start_times, stop_times, EMG_2[['Time', 'EMG2']], save_path = os.path.join(end_subject_dir,'Graphs'))
 
-    EMG_11_amp_diff.to_csv(os.path.join(final_data_path,subject_id,'EMG_11_amp_diff.csv'), index=False, header=True)
-    EMG_12_amp_diff.to_csv(os.path.join(final_data_path,subject_id,'EMG_12_amp_diff.csv'), index=False, header=True)
-    EMG_21_amp_diff.to_csv(os.path.join(final_data_path,subject_id,'EMG_21_amp_diff.csv'), index=False, header=True)
-    EMG_22_amp_diff.to_csv(os.path.join(final_data_path,subject_id,'EMG_22_amp_diff.csv'), index=False, header=True)
+    EMG_11_diff.to_csv(os.path.join(end_subject_dir,'EMG_11_extrema.csv'), index=False, header=True)
+    EMG_12_diff.to_csv(os.path.join(end_subject_dir,'EMG_12_extrema.csv'), index=False, header=True)
+    EMG_21_diff.to_csv(os.path.join(end_subject_dir,'EMG_21_extrema.csv'), index=False, header=True)
+    EMG_22_diff.to_csv(os.path.join(end_subject_dir,'EMG_22_extrema.csv'), index=False, header=True)
 
 
