@@ -6,14 +6,16 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 
-def peak_analysis(start_times, stop_times, signal, save_path):
+def peak_analysis(start_times, stop_times, signal, save_path, plot_show=True):
     """
-    Perform peak analysis on the cleaned EMG signal to identify the maximum value and its corresponding time.
+    Perform peak analysis on the signal to identify the maximum value and its corresponding time.
 
     Parameters:
     start_times (list): List of start times for each trial.
     stop_times (list): List of stop times for each trial.
     signal (pd.DataFrame): The DataFrame containing the signal with columns ['Time', signal_column].
+    save_path (str): The path where the analysis results will be saved.
+    plot_show (bool): Whether to display the plots (default is True).
 
     Returns:
     tuple: DataFrames containing the maxima and minima for each EMG channel.
@@ -22,7 +24,7 @@ def peak_analysis(start_times, stop_times, signal, save_path):
     total_amp_diff = []
     total_time_diff = []
     extrema_diff = pd.DataFrame(columns=["amp_diff", "time_diff"])
-    save_path = os.makedirs(save_path, exist_ok=True)
+    os.makedirs(save_path, exist_ok=True)
     
     for start, stop in zip(start_times, stop_times):
         trial_data = signal[(signal['Time'] >= start) & (signal['Time'] <= stop)]
@@ -34,42 +36,139 @@ def peak_analysis(start_times, stop_times, signal, save_path):
         indicies = mindices.tolist() + maxdices.tolist()
         indicies.sort()
 
-        trial_amp_diff = trial_data[indicies][amplitude].diff().abs()
-        trial_time_diff = trial_data[indicies]['Time'].diff()
+        trial_amp_diff = trial_data.iloc[indicies][amplitude].diff()
+        trial_time_diff = trial_data.iloc[indicies]['Time'].diff()
 
         total_amp_diff.append(trial_amp_diff)
         total_time_diff.append(trial_time_diff)
 
-    extrema_diff["amp_diff"] = total_amp_diff
-    extrema_diff["time_diff"] = total_time_diff
+    extrema_diff["amp_diff"] = pd.concat(total_amp_diff)
+    extrema_diff["time_diff"] = pd.concat(total_time_diff)
 
     plt.figure(figsize=(7, 6))
     sns.histplot(data=extrema_diff["amp_diff"].dropna(), kde=True, stat = "density", alpha=0.7, color='blue', edgecolor='black')
     plt.xlabel('Amplitude Difference')
     plt.ylabel('Frequency')
     plt.title('Histogram of Amplitude Differences')
-    plt.savefig(save_path + '/Amplitude_Difference_Histogram.png', dpi=300, bbox_inches='tight')
+    plt.savefig(save_path + '_Amplitude_Difference_Histogram.png', dpi=300, bbox_inches='tight')
+    if plot_show:
+        plt.show()
+    plt.close()
+  
 
     plt.figure(figsize=(7, 6))
     sns.histplot(data=extrema_diff["time_diff"].dropna(), kde=True, stat = "density", alpha=0.7, color='green', edgecolor='black')
     plt.xlabel('Time Difference')
     plt.ylabel('Frequency')
     plt.title('Histogram of Time Differences')
-    plt.savefig(save_path + '/Time_Difference_Histogram.png', dpi=300, bbox_inches='tight')         
+    plt.savefig(save_path + '_Time_Difference_Histogram.png', dpi=300, bbox_inches='tight')         
+    if plot_show:
+        plt.show()
+    plt.close()
 
     plt.figure(figsize=(7, 7))
     plt.scatter(extrema_diff["time_diff"], extrema_diff["amp_diff"], alpha=0.7, color='purple', edgecolor='black')
     plt.xlabel('Time Difference')
     plt.ylabel('Amplitude Difference')
     plt.title('Scatter Plot of Time vs Amplitude Differences')
-    plt.savefig(save_path + '/Time_vs_Amplitude_Differences_Scatter.png', dpi=300, bbox_inches='tight')                  
+    plt.savefig(save_path + '_Time_vs_Amplitude_Differences_Scatter.png', dpi=300, bbox_inches='tight')
+    if plot_show:
+        plt.show()
+    plt.close()
 
-    plt.figure(figsize=(7,6))
-    sns.heatmap(extrema_diff, annot=True, cmap='coolwarm')
-    plt.title('Heatmap of Amplitude and Time Differences')
-    plt.savefig(save_path + '/Amplitude_and_Time_Differences_Heatmap.png', dpi=300, bbox_inches='tight')
+    plt.figure(figsize=(8, 6))
+    sns.histplot(data=extrema_diff, x = 'time_diff', y = 'amp_diff', bins=30, stat='count', cbar=True, cbar_kws={'label': 'Co-occurrence count'}, cmap='magma')
+    plt.xlabel('Time Difference (s)')
+    plt.ylabel('Amplitude Difference')
+    plt.title('Co-occurrence Frequency of Amplitude and Time Differences')
+    plt.savefig(os.path.join(save_path, '_Amplitude_and_Time_Differences_Heatmap.png'), dpi=300,  bbox_inches='tight')
+    if plot_show:
+        plt.show()
+    plt.close()
 
     return extrema_diff
+
+
+def emg_sanity_check(raw_signal, final_signal, start_times, stop_times, hit_times, save_path):
+    """Plot raw and processed EMG1 over the same session interval and time axis."""
+    if not start_times or not stop_times:
+        raise ValueError("Cannot plot the EMG sanity check without detected trial starts and stops.")
+
+    session_start = min(start_times)
+    session_stop = max(stop_times)
+    session_midpoint = (session_start + session_stop) / 2
+    plot_start = max(session_start, session_midpoint - 20)
+    plot_stop = min(session_stop, session_midpoint + 20)
+    raw_session = raw_signal[
+        (raw_signal['Time'] >= plot_start) & (raw_signal['Time'] <= plot_stop)
+    ]
+    final_session = final_signal[
+        (final_signal['Time'] >= plot_start) & (final_signal['Time'] <= plot_stop)
+    ]
+
+    os.makedirs(save_path, exist_ok=True)
+    fig, raw_ax = plt.subplots(figsize=(16, 6))
+    final_ax = raw_ax.twinx()
+
+    raw_line, = raw_ax.plot(
+        raw_session['Time'], raw_session['EMG1'],
+        color='tab:blue', alpha=0.55, linewidth=0.7, label='Raw EMG1 (mV)'
+    )
+    final_line, = final_ax.plot(
+        final_session['Time'], final_session['EMG1'],
+        color='tab:orange', linewidth=0.7, label='Final EMG1 (normalized)'
+    )
+
+    raw_values = raw_session['EMG1'].to_numpy(dtype=float)
+    raw_values = raw_values[np.isfinite(raw_values)]
+    final_values = final_session['EMG1'].to_numpy(dtype=float)
+    final_values = final_values[np.isfinite(final_values)]
+    raw_limit = max(np.max(np.abs(raw_values)), np.finfo(float).eps) if raw_values.size else 1.0
+    final_limit = max(np.max(np.abs(final_values)), np.finfo(float).eps) if final_values.size else 1.0
+    raw_ax.set_ylim(-raw_limit, raw_limit)
+    final_ax.set_ylim(-final_limit, final_limit)
+
+    visible_starts = [start for start in start_times if plot_start <= start <= plot_stop]
+    for i, start in enumerate(visible_starts):
+        raw_ax.axvline(
+            start, color='tab:green', linestyle='--', alpha=0.75,
+            label='Trial start' if i == 0 else None
+        )
+    visible_stops = [stop for stop in stop_times if plot_start <= stop <= plot_stop]
+    for i, stop in enumerate(visible_stops):
+        raw_ax.axvline(
+            stop, color='tab:red', linestyle='--', alpha=0.75,
+            label='Trial stop' if i == 0 else None
+        )
+    visible_hits = [hit for hit in hit_times if plot_start <= hit <= plot_stop]
+    for i, hit in enumerate(visible_hits):
+        raw_ax.axvline(
+            hit, color='black', linestyle=':', alpha=0.65,
+            label='Target hit' if i == 0 else None
+        )
+
+    raw_ax.set_xlim(plot_start, plot_stop)
+    raw_ax.set_xlabel('Time (s)')
+    raw_ax.set_ylabel('Raw EMG1 (mV)', color='tab:blue')
+    final_ax.set_ylabel('Final EMG1 (normalized)', color='tab:orange')
+    raw_ax.set_title('EMG1 Raw vs Final — Middle 40 Seconds of Session')
+    raw_ax.grid(True, alpha=0.2)
+    handles = [raw_line, final_line]
+    labels = [line.get_label() for line in handles]
+    event_handles, event_labels = raw_ax.get_legend_handles_labels()
+    event_items = [
+        (handle, label)
+        for handle, label in zip(event_handles, event_labels)
+        if label in {'Trial start', 'Trial stop', 'Target hit'}
+    ]
+    raw_ax.legend(
+        handles + [handle for handle, _ in event_items],
+        labels + [label for _, label in event_items],
+        loc='upper right',
+    )
+    fig.tight_layout()
+    fig.savefig(os.path.join(save_path, 'EMG_1_sanity_check.png'), dpi=300, bbox_inches='tight')
+    plt.close(fig)
 
 def onset_detection(EMG, threshold, min_duration=0.05, fs=1000):
     """

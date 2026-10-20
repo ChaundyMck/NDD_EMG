@@ -30,25 +30,29 @@ def butter_bandpass_filter(signal, lowcut, highcut, fs, order = 4):
     return filtered_signal
     
 
-def resamp(signal):
+def resamp(signal, fs_new=1000):
     """
-    Resample the data to 1000 Hz, nothing significant above 1000 Hz
+    Resample the data to 1000 Hz
 
     signal: array-like 
-        input EMG signal
+        input signal
+    fs_new: int
+        new sampling frequency (default = 1000 Hz)
 
     Returns
-    EMG_resamp: ndarray
-        EMG signal resampled to 1000 Hz
+    rs_signal: ndarray
+        signal resampled to 1000 Hz
     """
     
-    EMG_resamp = signal.copy()
-    EMG_resamp['Time'] = pd.to_datetime(EMG_resamp['Time'], unit='s')
-    EMG_resamp = EMG_resamp.set_index('Time')
-    EMG_resamp = EMG_resamp.resample('1ms').mean().interpolate(method='linear')
-    EMG_resamp = EMG_resamp.reset_index()
+    
+    newtime = np.arange(signal['Time'].iloc[0], signal['Time'].iloc[-1], 1/fs_new)
 
-    return EMG_resamp
+    rs_signal = pd.DataFrame(columns=signal.columns)
+    rs_signal['Time'] = newtime
+    for col in signal.columns[1:]:
+        rs_signal[col] = np.interp(newtime, signal['Time'], signal[col])
+
+    return rs_signal
 
 
 

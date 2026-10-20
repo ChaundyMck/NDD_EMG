@@ -11,7 +11,8 @@ class MissingFileError(Exception):
     pass
 
 def find_file(subject_dir, pattern):
-    matches = sorted(glob.glob(os.path.join(subject_dir, pattern)))
+    search_pattern = os.path.join(glob.escape(subject_dir), pattern)
+    matches = sorted(glob.glob(search_pattern))
     if not matches:
         raise MissingFileError(f"no file matching '{pattern}' in {subject_dir}")
     if len(matches) > 1:
@@ -52,7 +53,7 @@ def delsys_csv_breakdown(delsys_csv):
             cf_new_cols.append(cf_col)
     config.columns = cf_new_cols
 
-    data = pd.read_csv(delsys_csv,header=5,skiprows=[6,7],index_col=False)
+    data = pd.read_csv(delsys_csv,header=5,skiprows=[6,7],index_col=False, skipinitialspace=True)
     data.columns = (
         data.columns
         .astype(str)
@@ -110,10 +111,12 @@ def trial_determination(mat_data, target_data):
         nearest_start = starts[starts <= hit_time].max()
         nearest_stop = stops[stops >= hit_time].min()
     
-        if 0<i<len(target_data)-1:      #only consider trials that have their own start and stop times
+        if 0<i<len(target_data)-1:      # only consider trials that have their own start and stop times, select only trials that occur after the EMG has started, and consider the starts and stops closest to the hit of the trial.
             next_hit_time = target_data['hitTime'].iloc[i+1]
             previous_hit_time = target_data['hitTime'].iloc[i-1]
-            if bool(nearest_start >= previous_hit_time) and bool(nearest_stop <= next_hit_time):
+            if (
+                bool(nearest_start > 0) and bool(nearest_start >= previous_hit_time)and bool(nearest_stop <= next_hit_time)
+            ):
                 start_times.append(nearest_start)
                 stop_times.append(nearest_stop)
                 hit_times.append(hit_time)
