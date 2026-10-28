@@ -113,9 +113,9 @@ def trial_determination(mat_data, target_data):
     
         if 0<i<len(target_data)-1:      # only consider trials that have their own start and stop times, select only trials that occur after the EMG has started, and consider the starts and stops closest to the hit of the trial.
             next_hit_time = target_data['hitTime'].iloc[i+1]
-            previous_hit_time = target_data['hitTime'].iloc[i-1]
+            previous_stop = stop_times[-1] if stop_times else 0
             if (
-                bool(nearest_start > 0) and bool(nearest_start >= previous_hit_time)and bool(nearest_stop <= next_hit_time)
+                bool(nearest_start > previous_stop) and bool(nearest_stop <= next_hit_time)
             ):
                 start_times.append(nearest_start)
                 stop_times.append(nearest_stop)
@@ -123,3 +123,15 @@ def trial_determination(mat_data, target_data):
           
 
     return start_times, stop_times, hit_times
+
+def TKEO(signal):
+    """ 
+    Teager-Kaiser energy operator
+    psi[n] = signal[n^2] - signal[n-1]*signal[n+1]
+    """
+    y = np.empty_like(signal)
+    y[1:-1] = signal[1:-1]**2 - signal[:-2]*signal[2:]
+    y[0], y[-1] = y[1], y[-2]
+    return y
+
+#def CFAR_onset()

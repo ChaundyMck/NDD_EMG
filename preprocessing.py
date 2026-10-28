@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy.signal import find_peaks, butter, filtfilt
+from scipy.stats import norm
 
 def butter_bandpass_filter(signal, lowcut, highcut, fs, order = 4):
     """
@@ -98,7 +99,7 @@ def sync(analog_data, target_data, a_event_cutoff=0.01):
     analog = analog_data['Analog'].to_numpy(dtype=float)
     peaks, _ = find_peaks(np.nan_to_num(analog), height=a_event_cutoff, distance = 100)
     if len(peaks) == 0:
-        raise ValueError("No peaks found in the analog data that exceed the specified cutoff value.")
+        raise ValueError("Incorrect analog data: no valid peaks found above the cutoff value; skipping trial.")
     a_event_time = analog_data['Time'].iloc[peaks].dropna()
     t_event_time = (target_data['hitTime']/1000).dropna()  # Convert milliseconds to seconds and drop NaN values
     if a_event_time.empty or t_event_time.empty:
@@ -127,3 +128,15 @@ def peak_normalization(EMG_signal):
     normalized_signal['EMG2'] = normalized_signal['EMG2'] / normalized_signal['EMG2'].max()
 
     return normalized_signal
+
+def IMU_smooth(raw_accel, win):
+    """
+    Gaussian filter applied to IMU data
+    """
+
+    tau = int(np.ceil(win/2))
+    t = np.arrange(-(tau-1),tau)
+    gauss = norm.pdf(t, 0, tau/2)
+    smooth = np.convolve(raw_accel, gauss, mode = 'same')
+    
+    return smooth

@@ -45,6 +45,7 @@ def peak_analysis(start_times, stop_times, signal, save_path, plot_show=True):
     extrema_diff["amp_diff"] = pd.concat(total_amp_diff)
     extrema_diff["time_diff"] = pd.concat(total_time_diff)
 
+
     plt.figure(figsize=(7, 6))
     sns.histplot(data=extrema_diff["amp_diff"].dropna(), kde=True, stat = "density", alpha=0.7, color='blue', edgecolor='black')
     plt.xlabel('Amplitude Difference')
@@ -77,11 +78,11 @@ def peak_analysis(start_times, stop_times, signal, save_path, plot_show=True):
     plt.close()
 
     plt.figure(figsize=(8, 6))
-    sns.histplot(data=extrema_diff, x = 'time_diff', y = 'amp_diff', bins=30, stat='count', cbar=True, cbar_kws={'label': 'Co-occurrence count'}, cmap='magma')
+    sns.histplot(data=extrema_diff, x = 'time_diff', y = 'amp_diff', bins=50, stat='count', cbar=True, cbar_kws={'label': 'Co-occurrence count'}, cmap='magma')
     plt.xlabel('Time Difference (s)')
     plt.ylabel('Amplitude Difference')
     plt.title('Co-occurrence Frequency of Amplitude and Time Differences')
-    plt.savefig(os.path.join(save_path, '_Amplitude_and_Time_Differences_Heatmap.png'), dpi=300,  bbox_inches='tight')
+    plt.savefig(save_path + '_Amplitude_and_Time_Differences_Heatmap.png', dpi=300,  bbox_inches='tight')
     if plot_show:
         plt.show()
     plt.close()
@@ -91,81 +92,60 @@ def peak_analysis(start_times, stop_times, signal, save_path, plot_show=True):
 
 def emg_sanity_check(raw_signal, final_signal, start_times, stop_times, hit_times, save_path):
     """Plot raw and processed EMG1 over the same session interval and time axis."""
-    if not start_times or not stop_times:
-        raise ValueError("Cannot plot the EMG sanity check without detected trial starts and stops.")
 
     session_start = min(start_times)
     session_stop = max(stop_times)
     session_midpoint = (session_start + session_stop) / 2
     plot_start = max(session_start, session_midpoint - 20)
     plot_stop = min(session_stop, session_midpoint + 20)
-    raw_session = raw_signal[
-        (raw_signal['Time'] >= plot_start) & (raw_signal['Time'] <= plot_stop)
-    ]
-    final_session = final_signal[
-        (final_signal['Time'] >= plot_start) & (final_signal['Time'] <= plot_stop)
-    ]
+    raw_session = raw_signal[(raw_signal['Time'] >= plot_start) & (raw_signal['Time'] <= plot_stop)]
+    final_session = final_signal[(final_signal['Time'] >= plot_start) & (final_signal['Time'] <= plot_stop)]
 
     os.makedirs(save_path, exist_ok=True)
-    fig, raw_ax = plt.subplots(figsize=(16, 6))
-    final_ax = raw_ax.twinx()
+    fig, (raw_ax_1, raw_ax_2) = plt.subplots(nrows=2, ncols=1, figsize=(10, 8), sharex=True)
+   
+    for raw_ax in (raw_ax_1, raw_ax_2):
+        j = 1
+        final_ax = raw_ax.twinx()
+        raw_line, = raw_ax.plot(raw_session['Time'], raw_session.iloc[:,j], color = 'blue', alpha = 0.5, label = 'Raw EMG')
+        final_line, = final_ax.plot(final_session['Time'], final_session.iloc[:,j], color='orange', linewidth=0.7, label='Final EMG')
 
-    raw_line, = raw_ax.plot(
-        raw_session['Time'], raw_session['EMG1'],
-        color='tab:blue', alpha=0.55, linewidth=0.7, label='Raw EMG1 (mV)'
-    )
-    final_line, = final_ax.plot(
-        final_session['Time'], final_session['EMG1'],
-        color='tab:orange', linewidth=0.7, label='Final EMG1 (normalized)'
-    )
+        raw_limit = np.max(np.abs(raw_session.iloc[:,j]))
+        final_limit = np.max(np.abs(final_session.iloc[:,j]))
+        raw_ax.set_ylim(-raw_limit, raw_limit)
+        final_ax.set_ylim(-final_limit, final_limit)
 
-    raw_values = raw_session['EMG1'].to_numpy(dtype=float)
-    raw_values = raw_values[np.isfinite(raw_values)]
-    final_values = final_session['EMG1'].to_numpy(dtype=float)
-    final_values = final_values[np.isfinite(final_values)]
-    raw_limit = max(np.max(np.abs(raw_values)), np.finfo(float).eps) if raw_values.size else 1.0
-    final_limit = max(np.max(np.abs(final_values)), np.finfo(float).eps) if final_values.size else 1.0
-    raw_ax.set_ylim(-raw_limit, raw_limit)
-    final_ax.set_ylim(-final_limit, final_limit)
+        visible_starts = [start for start in start_times if plot_start <= start <= plot_stop]
+        for i, start in enumerate(visible_starts):
+            raw_ax.axvline(start, color='green', linestyle='--', label='Trial start' if i == 0 else None)
+        visible_stops = [stop for stop in stop_times if plot_start <= stop <= plot_stop]
+        for i, stop in enumerate(visible_stops):
+            raw_ax.axvline(stop, color='red', linestyle='--',label='Trial stop' if i == 0 else None)
+        visible_hits = [hit for hit in hit_times if plot_start <= hit <= plot_stop]
+        for i, hit in enumerate(visible_hits):
+            raw_ax.axvline(hit, color='yellow', label='Target hit' if i == 0 else None)
 
-    visible_starts = [start for start in start_times if plot_start <= start <= plot_stop]
-    for i, start in enumerate(visible_starts):
-        raw_ax.axvline(
-            start, color='tab:green', linestyle='--', alpha=0.75,
-            label='Trial start' if i == 0 else None
+        raw_ax.set_xlim(plot_start, plot_stop)
+        raw_ax.set_xlabel('Time (s)')
+        raw_ax.set_ylabel('Raw EMG (mV)', color='blue')
+        final_ax.set_ylabel('Final EMG', color='orange')
+        raw_ax.set_title( f"{raw_session.columns[j]} Raw vs Final — Middle 40 Seconds of Session")
+        raw_ax.grid(True, alpha=0.2)
+        handles = [raw_line, final_line]
+        labels = [line.get_label() for line in handles]
+        event_handles, event_labels = raw_ax.get_legend_handles_labels()
+        event_items = [
+            (handle, label)
+            for handle, label in zip(event_handles, event_labels)
+            if label in {'Trial start', 'Trial stop', 'Target hit'}
+        ]
+        raw_ax.legend(
+            handles + [handle for handle, _ in event_items],
+            labels + [label for _, label in event_items],
+            loc='upper right',
         )
-    visible_stops = [stop for stop in stop_times if plot_start <= stop <= plot_stop]
-    for i, stop in enumerate(visible_stops):
-        raw_ax.axvline(
-            stop, color='tab:red', linestyle='--', alpha=0.75,
-            label='Trial stop' if i == 0 else None
-        )
-    visible_hits = [hit for hit in hit_times if plot_start <= hit <= plot_stop]
-    for i, hit in enumerate(visible_hits):
-        raw_ax.axvline(
-            hit, color='black', linestyle=':', alpha=0.65,
-            label='Target hit' if i == 0 else None
-        )
+        j = j+1
 
-    raw_ax.set_xlim(plot_start, plot_stop)
-    raw_ax.set_xlabel('Time (s)')
-    raw_ax.set_ylabel('Raw EMG1 (mV)', color='tab:blue')
-    final_ax.set_ylabel('Final EMG1 (normalized)', color='tab:orange')
-    raw_ax.set_title('EMG1 Raw vs Final — Middle 40 Seconds of Session')
-    raw_ax.grid(True, alpha=0.2)
-    handles = [raw_line, final_line]
-    labels = [line.get_label() for line in handles]
-    event_handles, event_labels = raw_ax.get_legend_handles_labels()
-    event_items = [
-        (handle, label)
-        for handle, label in zip(event_handles, event_labels)
-        if label in {'Trial start', 'Trial stop', 'Target hit'}
-    ]
-    raw_ax.legend(
-        handles + [handle for handle, _ in event_items],
-        labels + [label for _, label in event_items],
-        loc='upper right',
-    )
     fig.tight_layout()
     fig.savefig(os.path.join(save_path, 'EMG_1_sanity_check.png'), dpi=300, bbox_inches='tight')
     plt.close(fig)
