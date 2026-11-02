@@ -8,9 +8,11 @@ from preprocessing import butter_bandpass_filter, resamp, rms_smoothing, IMU_smo
 import numpy as np
 from scipy.signal import find_peaks
 
+
+
 initial_data_path = '/Users/clmckeev/Library/CloudStorage/OneDrive-SharedLibraries-IndianaUniversity/[Sec-E] BL-Phys-NDD_EMG - Documents/NDD_EMG/Data/Raw/All'
 final_data_path = '/Users/clmckeev/Library/CloudStorage/OneDrive-SharedLibraries-IndianaUniversity/[Sec-E] BL-Phys-NDD_EMG - Documents/NDD_EMG/Data/Final'
-folders = [ '040', '041', '042', '043', '044', '045', '046', '047','048', '048', '050' ] #This line should be altered as needed
+folders = [ '001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011', '012', '013', '014', '015', '016', '017', '018', '019', '020', '021', '022', '023', '024', '025', '026', '027', '028', '029', '030', '031', '032', '033', '034', '035', '036', '037', '038', '039', '040', '041', '042', '043', '044', '045', '046', '047','048', '049', '050', '051', '052', '053', '054', '056', '057', '058', '059']
 required_files = {'EMG': '*EMG.csv', 'Info': '*info.csv', 'Mat': 'mat*.csv', 'Target': 'target*.csv'}
 misses = {}
 for subject_id in folders: #Collect recorded data of each participant
@@ -97,7 +99,7 @@ for subject_id in folders: #Collect recorded data of each participant
     ## Preprocessing data
 
      # Sync analog and digital data 
-    analog_peaks, _ = find_peaks(np.nan_to_num(Analog['Analog']), height=0.01, distance = 100)
+    analog_peaks, _ = find_peaks(np.nan_to_num(Analog['Analog']), height=0.003, distance = 100)
     if len(analog_peaks) < 20:
         print(f"Skipping {subject_id} due to incorrectly recorded Analog data")
         misses[subject_id] = "Incorrect Analog data"
@@ -113,6 +115,10 @@ for subject_id in folders: #Collect recorded data of each participant
 
      # Determine trial start and stop times and remove unsuccesful trials, clean_EMG only includes data within the start and stop times of each trial
     start_times, stop_times, hit_times = trial_determination(mat_data, target_data)
+    if len(start_times) < 10 or len(stop_times) < 10:
+        print(f"Skipping {subject_id} due to incorrectly recorded Mat data")
+        misses[subject_id] = "Incorrect Mat data"
+        continue
 
      ## EMG data
     samp_freqEMG = float(sensor_config[' EMG 1 (mV).1'].iloc[0].split()[0])
@@ -147,10 +153,10 @@ for subject_id in folders: #Collect recorded data of each participant
 
     smooth_EMG_1 = EMG_1.copy()
     smooth_EMG_2 = EMG_2.copy()
-    smooth_EMG_1['EMG1'] = rms_smoothing(EMG_1['EMG1'], 30) # window size of 30 samples (30 ms)
-    smooth_EMG_1['EMG2'] = rms_smoothing(EMG_1['EMG2'], 30)
-    smooth_EMG_2['EMG1'] = rms_smoothing(EMG_2['EMG1'], 30)
-    smooth_EMG_2['EMG2'] = rms_smoothing(EMG_2['EMG2'], 30)
+    smooth_EMG_1['EMG1'] = rms_smoothing(EMG_1['EMG1'], 300) # window size of 30 samples (30 ms)
+    smooth_EMG_1['EMG2'] = rms_smoothing(EMG_1['EMG2'], 300)
+    smooth_EMG_2['EMG1'] = rms_smoothing(EMG_2['EMG1'], 300)
+    smooth_EMG_2['EMG2'] = rms_smoothing(EMG_2['EMG2'], 300)
     smooth_EMG_1.to_csv(os.path.join(end_subject_dir,'rms_EMG_1.csv'), index=False, header=True)
     smooth_EMG_2.to_csv(os.path.join(end_subject_dir,'rms_EMG_2.csv'), index=False, header=True)
 
@@ -174,29 +180,29 @@ for subject_id in folders: #Collect recorded data of each participant
     gyro_tdata_2.to_csv(os.path.join(end_subject_dir,'gyro_trial_data.csv'), index = False, header =True)
 
      #Smooth IMU data with Gaussian filter
-    accel = pd.Dataframe
-    for c in accel_tdata_2.columns:
-        if c == 'Time':
-            accel[c] = accel_tdata_2[c]
-        else:
-            accel[c] = IMU_smooth(accel_tdata_2[c],96)
+    accel = accel_tdata_2.copy()
+    for c in ['X', 'Y', 'Z', 'Mag']:
+        accel[c] = IMU_smooth(accel_tdata_2[c],96)
 
    
     ## Analysis
-
+    Measures = pd.DataFrame(columns=['EMG_11_FanoFactor', 'EMG_11_Entropy', 'EMG_12_FanoFactor', 'EMG_12_Entropy', 'EMG_21_FanoFactor', 'EMG_21_Entropy', 'EMG_22_FanoFactor', 'EMG_22_Entropy', 'Accel_FanoFactor', 'Accel_Entropy'])
      # change between subsequent maxima and minima within trials
-    EMG_11_diff = peak_analysis(start_times, stop_times, smooth_EMG_1[['Time', 'EMG1']], save_path = os.path.join(end_subject_dir,'Graphs','EMG_1_1_extrema'), plot_show=False)
-    EMG_12_diff = peak_analysis(start_times, stop_times, smooth_EMG_1[['Time', 'EMG2']], save_path = os.path.join(end_subject_dir,'Graphs','EMG_1_2_extrema'), plot_show=False)
-    EMG_21_diff = peak_analysis(start_times, stop_times, smooth_EMG_2[['Time', 'EMG1']], save_path = os.path.join(end_subject_dir,'Graphs','EMG_2_1_extrema'), plot_show=False)
-    EMG_22_diff = peak_analysis(start_times, stop_times, smooth_EMG_2[['Time', 'EMG2']], save_path = os.path.join(end_subject_dir,'Graphs','EMG_2_2_extrema'), plot_show=False)
+    EMG_11_diff, EMG_11_FF, EMG_11_Entropy = peak_analysis(start_times, stop_times, smooth_EMG_1[['Time', 'EMG1']], save_path = os.path.join(end_subject_dir,'Graphs','EMG_1_1_extrema'), plot_show=False, decimals=2)
+    EMG_12_diff, EMG_12_FF, EMG_12_Entropy = peak_analysis(start_times, stop_times, smooth_EMG_1[['Time', 'EMG2']], save_path = os.path.join(end_subject_dir,'Graphs','EMG_1_2_extrema'), plot_show=False, decimals=2)
+    EMG_21_diff, EMG_21_FF, EMG_21_Entropy = peak_analysis(start_times, stop_times, smooth_EMG_2[['Time', 'EMG1']], save_path = os.path.join(end_subject_dir,'Graphs','EMG_2_1_extrema'), plot_show=False, decimals=2)
+    EMG_22_diff, EMG_22_FF, EMG_22_Entropy = peak_analysis(start_times, stop_times, smooth_EMG_2[['Time', 'EMG2']], save_path = os.path.join(end_subject_dir,'Graphs','EMG_2_2_extrema'), plot_show=False, decimals=2)
 
     EMG_11_diff.to_csv(os.path.join(end_subject_dir,'EMG_11_extrema.csv'), index=False, header=True)
     EMG_12_diff.to_csv(os.path.join(end_subject_dir,'EMG_12_extrema.csv'), index=False, header=True)
     EMG_21_diff.to_csv(os.path.join(end_subject_dir,'EMG_21_extrema.csv'), index=False, header=True)
     EMG_22_diff.to_csv(os.path.join(end_subject_dir,'EMG_22_extrema.csv'), index=False, header=True)
 
-    accel_diff = peak_analysis(start_times, start_times, accel[['Time', 'Mag']], save_path= os.path.join(end_subject_dir,'Graphs','accel_extrema'), plot_show = False)
-
+    accel_diff, FF, Entropy = peak_analysis(start_times, start_times, accel[['Time', 'Mag']], save_path= os.path.join(end_subject_dir,'Graphs','accel_extrema'), plot_show = False, decimals = 2, units = "G")
+    accel_diff.to_csv(os.path.join(end_subject_dir,'accel_extrema.csv'), index=False, header=True)
+ 
+    Measures.loc[0] = [EMG_11_FF, EMG_11_Entropy, EMG_12_FF, EMG_12_Entropy, EMG_21_FF, EMG_21_Entropy, EMG_22_FF, EMG_22_Entropy, FF, Entropy]
+    Measures.to_csv(os.path.join(end_subject_dir,'Measures.csv'), index=False, header=True)
 
 print("Processing complete. The following subjects were skipped due to missing files or data:")
 for subject_id, reason in misses.items():

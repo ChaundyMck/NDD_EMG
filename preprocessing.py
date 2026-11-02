@@ -1,11 +1,11 @@
 import numpy as np
 import pandas as pd
-from scipy.signal import find_peaks, butter, filtfilt
+from scipy.signal import find_peaks, butter, filtfilt, iirnotch
 from scipy.stats import norm
 
 def butter_bandpass_filter(signal, lowcut, highcut, fs, order = 4):
     """
-    Apply a 4th order butterworth bandpass filter
+    Apply a Butterworth bandpass filter followed by a 60 Hz notch filter.
 
     signal: array-like
         input EMG signal
@@ -27,6 +27,8 @@ def butter_bandpass_filter(signal, lowcut, highcut, fs, order = 4):
     high = highcut/nyq
     b,a = butter(order, [low,high], btype = 'bandpass')
     filtered_signal = filtfilt(b,a,signal)
+    notch_b, notch_a = iirnotch(60, Q=30, fs=fs)
+    filtered_signal = filtfilt(notch_b, notch_a, filtered_signal)
 
     return filtered_signal
     
@@ -135,7 +137,7 @@ def IMU_smooth(raw_accel, win):
     """
 
     tau = int(np.ceil(win/2))
-    t = np.arrange(-(tau-1),tau)
+    t = np.arange(-(tau-1),tau)
     gauss = norm.pdf(t, 0, tau/2)
     smooth = np.convolve(raw_accel, gauss, mode = 'same')
     

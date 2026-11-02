@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 
-def peak_analysis(start_times, stop_times, signal, save_path, plot_show=True):
+def peak_analysis(start_times, stop_times, signal, save_path, plot_show=True, decimals=2, units=""):
     """
     Perform peak analysis on the signal to identify the maximum value and its corresponding time.
 
@@ -16,16 +16,25 @@ def peak_analysis(start_times, stop_times, signal, save_path, plot_show=True):
     signal (pd.DataFrame): The DataFrame containing the signal with columns ['Time', signal_column].
     save_path (str): The path where the analysis results will be saved.
     plot_show (bool): Whether to display the plots (default is True).
+    decimals (int): Amplitude histogram bin width is 10**-decimals (default is 2).
+    units (str): Amplitude units used in the amplitude histogram x-label.
 
     Returns:
-    tuple: DataFrames containing the maxima and minima for each EMG channel.
+    pd.DataFrame: Amplitude and time differences between subsequent extrema. The amplitude
+    histogram's Fano factor and entropy are stored in extrema_diff.attrs["amp_fano_factor"]
+    and extrema_diff.attrs["amp_entropy"].
     """
     amplitude = signal.columns[1]  # Assuming the second column contains the signal data
     total_amp_diff = []
     total_time_diff = []
-    extrema_diff = pd.DataFrame(columns=["amp_diff", "time_diff"])
     os.makedirs(save_path, exist_ok=True)
-    
+
+    def finish_plot(name):
+        plt.savefig(save_path + name, dpi=300, bbox_inches='tight')
+        if plot_show:
+            plt.show()
+        plt.close()
+
     for start, stop in zip(start_times, stop_times):
         trial_data = signal[(signal['Time'] >= start) & (signal['Time'] <= stop)]
 
@@ -35,6 +44,7 @@ def peak_analysis(start_times, stop_times, signal, save_path, plot_show=True):
 
         indicies = mindices.tolist() + maxdices.tolist()
         indicies.sort()
+        indicies = [i for i in indicies if i > 0 and i < len(trial_data) - 1]  # Exclude first and last index
 
         trial_amp_diff = trial_data.iloc[indicies][amplitude].diff()
         trial_time_diff = trial_data.iloc[indicies]['Time'].diff()
@@ -42,52 +52,50 @@ def peak_analysis(start_times, stop_times, signal, save_path, plot_show=True):
         total_amp_diff.append(trial_amp_diff)
         total_time_diff.append(trial_time_diff)
 
-    extrema_diff["amp_diff"] = pd.concat(total_amp_diff)
-    extrema_diff["time_diff"] = pd.concat(total_time_diff)
+    extrema_diff = pd.DataFrame({"amp_diff": pd.concat(total_amp_diff), "time_diff": pd.concat(total_time_diff)})
 
+    # Amplitude difference histogram: symmetric bins of width 10**-decimals, normalized so bar heights sum to 1
+    amp_diff = extrema_diff["amp_diff"].dropna().to_numpy()
+    bin_width = 10.0 ** -decimals
+    amp_max = np.round(np.max(np.abs(amp_diff)), decimals) + bin_width
+    bin_edges = np.linspace(-amp_max, amp_max, int(round(2 * amp_max / bin_width)) + 1)
+    amp_counts, _ = np.histogram(amp_diff, bins=bin_edges)
+    amp_dist = amp_counts / amp_counts.sum()
 
     plt.figure(figsize=(7, 6))
-    sns.histplot(data=extrema_diff["amp_diff"].dropna(), kde=True, stat = "density", alpha=0.7, color='blue', edgecolor='black')
-    plt.xlabel('Amplitude Difference')
-    plt.ylabel('Frequency')
+    plt.stairs(amp_dist, bin_edges, fill=True, alpha=0.7, color='blue')
+    plt.xlabel(f'$\\Delta A_{{NN}}$ {units}')
+    plt.ylabel('$P(\\Delta A_{NN})$')
     plt.title('Histogram of Amplitude Differences')
-    plt.savefig(save_path + '_Amplitude_Difference_Histogram.png', dpi=300, bbox_inches='tight')
-    if plot_show:
-        plt.show()
-    plt.close()
-  
+    finish_plot('_Amplitude_Difference_Histogram.png')
+
+    # Fano factor and entropy of the amplitude difference distribution
+    FF = np.var(amp_dist, ddof=1) / np.mean(amp_dist)
+    nonzero = amp_dist[amp_dist > 0]
+    Entropy = -np.sum(nonzero * np.log(nonzero))
 
     plt.figure(figsize=(7, 6))
     sns.histplot(data=extrema_diff["time_diff"].dropna(), kde=True, stat = "density", alpha=0.7, color='green', edgecolor='black')
     plt.xlabel('Time Difference')
     plt.ylabel('Frequency')
     plt.title('Histogram of Time Differences')
-    plt.savefig(save_path + '_Time_Difference_Histogram.png', dpi=300, bbox_inches='tight')         
-    if plot_show:
-        plt.show()
-    plt.close()
+    finish_plot('_Time_Difference_Histogram.png')
 
     plt.figure(figsize=(7, 7))
     plt.scatter(extrema_diff["time_diff"], extrema_diff["amp_diff"], alpha=0.7, color='purple', edgecolor='black')
     plt.xlabel('Time Difference')
     plt.ylabel('Amplitude Difference')
     plt.title('Scatter Plot of Time vs Amplitude Differences')
-    plt.savefig(save_path + '_Time_vs_Amplitude_Differences_Scatter.png', dpi=300, bbox_inches='tight')
-    if plot_show:
-        plt.show()
-    plt.close()
+    finish_plot('_Time_vs_Amplitude_Differences_Scatter.png')
 
     plt.figure(figsize=(8, 6))
     sns.histplot(data=extrema_diff, x = 'time_diff', y = 'amp_diff', bins=50, stat='count', cbar=True, cbar_kws={'label': 'Co-occurrence count'}, cmap='magma')
     plt.xlabel('Time Difference (s)')
     plt.ylabel('Amplitude Difference')
     plt.title('Co-occurrence Frequency of Amplitude and Time Differences')
-    plt.savefig(save_path + '_Amplitude_and_Time_Differences_Heatmap.png', dpi=300,  bbox_inches='tight')
-    if plot_show:
-        plt.show()
-    plt.close()
+    finish_plot('_Amplitude_and_Time_Differences_Heatmap.png')
 
-    return extrema_diff
+    return extrema_diff, FF, Entropy
 
 
 def emg_sanity_check(raw_signal, final_signal, start_times, stop_times, hit_times, save_path):

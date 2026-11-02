@@ -100,8 +100,8 @@ def trial_determination(mat_data, target_data):
 
     mat_data['derivative'] = mat_data['Total'].diff()
 
-    start_ind, _ = find_peaks(-mat_data['derivative'], distance = 20, height = 300)
-    stop_ind, _ = find_peaks(mat_data['derivative'], distance = 20, height = 300)
+    start_ind, _ = find_peaks(-mat_data['derivative'], distance = 20, height = 50)
+    stop_ind, _ = find_peaks(mat_data['derivative'], distance = 20, height = 50)
 
     starts = mat_data['Time'].iloc[start_ind]
     stops = mat_data['Time'].iloc[stop_ind]
@@ -124,14 +124,39 @@ def trial_determination(mat_data, target_data):
 
     return start_times, stop_times, hit_times
 
-def TKEO(signal):
+def TKEO(signal, fs, win_size = 50, overlap = 0.9):
     """ 
     Teager-Kaiser energy operator
     psi[n] = signal[n^2] - signal[n-1]*signal[n+1]
-    """
-    y = np.empty_like(signal)
-    y[1:-1] = signal[1:-1]**2 - signal[:-2]*signal[2:]
-    y[0], y[-1] = y[1], y[-2]
-    return y
 
-#def CFAR_onset()
+    Take the moving average of the signal
+    """
+    TK = np.empty_like(signal)
+    TK[1:-1] = signal[1:-1]**2 - signal[:-2]*signal[2:]
+    TK[0], TK[-1] = TK[1], TK[-2]
+    TK = np.maximum(TK, 0.0)
+
+
+    win = max(2, int(round(win_size * fs)))
+    step = max(1, int(round(win * (1-overlap))))
+    c = np.concatenate(([0.0], np.cumsum(TK)))
+    starts = np.arange(0, len(TK) - win +1, step)
+    feat = (c[starts + win])
+
+    return feat, TK, starts, win, step
+
+def CFAR_threshold(feat, K, R, G, t_min = None, t_max = None):
+    """
+    Determine threshold for CFAR. Uses first full refernce window for beginning of signal.
+    """
+    
+    s = pd.Series(feat)
+    med = s.rolling(R, min_periods = R).median().shift(G).to_numpy()
+    first = np.flatnonzero(~np.isnan(med))
+    fill = med[first[0]] if first.size else np.nanmedian(feat)
+    med = np.where(np.isan(med), fill, med)
+    thr = K * med
+    if t_min is not None or t_max is not None:
+        the = np.clip(thr, t_min if t_min is not None else -np.inf, t_max if t_max is not None else np.inf)
+    
+    return thr
