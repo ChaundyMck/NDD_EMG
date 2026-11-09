@@ -4,17 +4,21 @@ import glob
 import os
 from analysis import peak_analysis, emg_sanity_check
 from extract import delsys_csv_breakdown, trial_determination, MissingFileError, find_file
-from preprocessing import butter_bandpass_filter, resamp, rms_smoothing, IMU_smooth
+from preprocessing import butter_bandpass_filter, resamp, rms_smoothing, IMU_smooth, preprocess_IMU
 import numpy as np
 from scipy.signal import find_peaks
+from CFAR_onset import cfar_onsets
 
 
 
-initial_data_path = '/Users/clmckeev/Library/CloudStorage/OneDrive-SharedLibraries-IndianaUniversity/[Sec-E] BL-Phys-NDD_EMG - Documents/NDD_EMG/Data/Raw/All'
-final_data_path = '/Users/clmckeev/Library/CloudStorage/OneDrive-SharedLibraries-IndianaUniversity/[Sec-E] BL-Phys-NDD_EMG - Documents/NDD_EMG/Data/Final'
-folders = [ '001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011', '012', '013', '014', '015', '016', '017', '018', '019', '020', '021', '022', '023', '024', '025', '026', '027', '028', '029', '030', '031', '032', '033', '034', '035', '036', '037', '038', '039', '040', '041', '042', '043', '044', '045', '046', '047','048', '049', '050', '051', '052', '053', '054', '056', '057', '058', '059']
-required_files = {'EMG': '*EMG.csv', 'Info': '*info.csv', 'Mat': 'mat*.csv', 'Target': 'target*.csv'}
+initial_data_path = '/Users/clmckeev/Desktop/Raw/All'
+final_data_path = '/Users/clmckeev/Desktop/Raw/Final'
+folders = [ '019']
+switched = ['034', '048'] #Folders that have switched sensor placements
+required_files = {'EMG': '*EMG.csv', 'Mat': 'mat*.csv', 'Target': 'target*.csv'}
 misses = {}
+cohort_info = pd.read_csv('/Users/clmckeev/Desktop/Raw/cohort_data.csv', dtype=str, index_col=False)
+
 for subject_id in folders: #Collect recorded data of each participant
     subject_dir = os.path.join(initial_data_path, subject_id)
     end_subject_dir = os.path.join(final_data_path, subject_id)
@@ -26,7 +30,8 @@ for subject_id in folders: #Collect recorded data of each participant
         continue
     info = {}
     (DT, sensor_config, delsys_data) = delsys_csv_breakdown(paths['EMG'])
-    p_data = pd.read_csv(paths['Info'])
+    p_data = pd.DataFrame(columns = cohort_info.columns)
+    p_data = cohort_info[cohort_info['ID #'] == subject_id]
     m_data = pd.read_csv(paths['Mat'])
     mat_data = pd.DataFrame()
     mat_data['Time'] = m_data.iloc[:, 0]
@@ -35,35 +40,27 @@ for subject_id in folders: #Collect recorded data of each participant
 
                   
     #Collect all test info in one place
-    info['Id'] = subject_id
-    info['Date'] = DT.iloc[0,1]
-    info['Age'] = p_data['Age']
-    info['Race'] = p_data['Race']
-    info['Diagnosis'] = p_data['Diagnosis']
-    info['Severity'] = p_data['Severity']
-    info['Medicated'] = p_data['Medicated']
-    info['Family History'] = p_data['Family History']
-    info['Brain Injury/Epilepsy'] = p_data['Brain Injury/Epilepsy']
-    info['Dominant Hand'] = p_data['Dom Hand']
-    info['Hand-eye Coordination'] = p_data['Hand-eye']
-    info['Clumsy'] = p_data['Clumsy']
-    info['Inhibition of arm movement'] = p_data['Inhibition']
-    info['ASD scale'] = p_data['ASD scale']
-    info['ADHD scale A'] = p_data['ADHD scale A']
-    info['ADHD scale total'] = p_data['ADHD scale total']
-    info['Active Medications'] = p_data['Meds']
-    info['Relatives'] = p_data['Relatives']
-    info['Notes'] = p_data['Notes']
-    
+    info = p_data.iloc[0].to_dict()
     info['Test Length'] = DT.iloc[1,1]
     for measurement in sensor_config.columns:
-        info[measurement] = sensor_config.loc[0, measurement]
-    info = pd.DataFrame([info])
+        info[measurement] = sensor_config[measurement]
+    info = pd.DataFrame(info)
     info.to_csv(os.path.join(end_subject_dir,'testing_info.csv'), index=False, header=True) #Save info file in individuals folder
 
     #Seperate all data into desired chunks
     #Standard is EMG_1_1 is Posterior Deltoid EMG_1_2 is Anterior Deltoid and the IMU_1 is on the acromion
     #EMG_2_1 is the IDF EMG_2_2 is Brachioradialus and IMU_2 is on the back of the hand
+    if subject_id in switched:
+        delsys_data = delsys_data.rename(columns={'EMG 1 (mV)': 'EMG 1 (mV) 2', 'EMG 1 (mV) 2': 'EMG 1 (mV)',
+                                                  'EMG 2 (mV)': 'EMG 2 (mV) 2', 'EMG 2 (mV) 2': 'EMG 2 (mV)',
+                                                  'ACC X (G)': 'ACC X (G) 2', 'ACC Y (G)': 'ACC Y (G) 2', 'ACC Z (G)': 'ACC Z (G) 2',
+                                                  'ACC X (G) 2': 'ACC X (G)', 'ACC Y (G) 2': 'ACC Y (G)', 'ACC Z (G) 2': 'ACC Z (G)',
+                                                  'GYRO X (deg/s)': 'GYRO X (deg/s) 2', 'GYRO Y (deg/s)': 'GYRO Y (deg/s) 2', 'GYRO Z (deg/s)': 'GYRO Z (deg/s) 2',
+                                                  'GYRO X (deg/s) 2': 'GYRO X (deg/s)', 'GYRO Y (deg/s) 2': 'GYRO Y (deg/s)', 'GYRO Z (deg/s) 2': 'GYRO Z (deg/s)'})
+        delsys_data = delsys_data.rename(columns={'EMG 1 Time Series (s)': 'EMG 1 Time Series (s) 2', 'EMG 1 Time Series (s) 2': 'EMG 1 Time Series (s)',
+                                                  'ACC X Time Series (s)': 'ACC X Time Series (s) 2', 'ACC X Time Series (s) 2': 'ACC X Time Series (s)',
+                                                  'GYRO X Time Series (s)': 'GYRO X Time Series (s) 2', 'GYRO X Time Series (s) 2': 'GYRO X Time Series (s)'})
+
     rawEMG_1 = delsys_data[['EMG 1 Time Series (s)', 'EMG 1 (mV)', 'EMG 2 (mV)']].dropna()
     rawEMG_1.columns = ['Time', 'EMG1', 'EMG2']
     rawEMG_1.to_csv(os.path.join(end_subject_dir,'EMG_1_raw.csv'), index=False, header=True) 
@@ -119,6 +116,8 @@ for subject_id in folders: #Collect recorded data of each participant
         print(f"Skipping {subject_id} due to incorrectly recorded Mat data")
         misses[subject_id] = "Incorrect Mat data"
         continue
+    trial_info = pd.DataFrame({'Start Time': start_times, 'Stop Time': stop_times, 'Hit Time': hit_times})
+    trial_info.to_csv(os.path.join(end_subject_dir,'trial_info.csv'), index=False, header=True)
 
      ## EMG data
     samp_freqEMG = float(sensor_config[' EMG 1 (mV).1'].iloc[0].split()[0])
@@ -160,19 +159,31 @@ for subject_id in folders: #Collect recorded data of each participant
     smooth_EMG_1.to_csv(os.path.join(end_subject_dir,'rms_EMG_1.csv'), index=False, header=True)
     smooth_EMG_2.to_csv(os.path.join(end_subject_dir,'rms_EMG_2.csv'), index=False, header=True)
 
-
     emg_sanity_check(rawEMG_1, smooth_EMG_1, start_times, stop_times, target_data['hitTime'], save_path=end_subject_dir)
 
+     #Onset detection using CFAR
+    onsets_EMG_1_1 = cfar_onsets(EMG_1, 'EMG1', channel = 'EMG_1_1', start_times = start_times, stop_times = stop_times, save_path = os.path.join(end_subject_dir,'Graphs','EMG_1_1_onsets'), title = 'EMG 1.1 Onset Detection')
+    onsets_EMG_1_2 = cfar_onsets(EMG_1, 'EMG2', channel = 'EMG_1_2', start_times = start_times, stop_times = stop_times, save_path = os.path.join(end_subject_dir,'Graphs','EMG_1_2_onsets'), title = 'EMG 1.2 Onset Detection')
+    onsets_EMG_2_1 = cfar_onsets(EMG_2, 'EMG1', channel = 'EMG_2_1', start_times = start_times, stop_times = stop_times, save_path = os.path.join(end_subject_dir,'Graphs','EMG_2_1_onsets'), title = 'EMG 2.1 Onset Detection')
+    onsets_EMG_2_2 = cfar_onsets(EMG_2, 'EMG2', channel = 'EMG_2_2', start_times = start_times, stop_times = stop_times, save_path = os.path.join(end_subject_dir,'Graphs','EMG_2_2_onsets'), title = 'EMG 2.2 Onset Detection')
+
+    
     ##IMU
+
+     # Resample, remove gyro bias, 5 Hz zero-phase low-pass, and separate gravity (see preprocess_imu)
+     # The hand rests on the mat between one trial's stop and the next trial's start, so those periods are used as static intervals for gyro bias
+    static_intervals = list(zip(stop_times[:-1], start_times[1:]))
+     # beta=0.001 (~7 s time constant at ~148 Hz) instead of the paper's thigh/walking value of 0.01 (~0.7 s), which absorbs part of a ~2 s reach into the gravity estimate
+    proc_acc_2, proc_gyro_2 = preprocess_IMU(rawAcc_2, rawGyro_2, static_intervals, cutoff=5, order=4, beta=0.001)
 
      #Only within trial data
      # start/stop are times (s), so select rows by the Time column and stack trials in long format with a Trial column
     accel_trials = []
     gyro_trials = []
     for trial, (start, stop) in enumerate(zip(start_times, stop_times), start=1):
-        accel_trials.append(rawAcc_2[(rawAcc_2['Time'] >= start) & (rawAcc_2['Time'] <= stop)].assign(Trial=trial))
-        gyro_trials.append(rawGyro_2[(rawGyro_2['Time'] >= start) & (rawGyro_2['Time'] <= stop)].assign(Trial=trial))
-    accel_tdata_2 = pd.concat(accel_trials, ignore_index=True)[['Trial', 'Time', 'X', 'Y', 'Z']]
+        accel_trials.append(proc_acc_2[(proc_acc_2['Time'] >= start) & (proc_acc_2['Time'] <= stop)].assign(Trial=trial))
+        gyro_trials.append(proc_gyro_2[(proc_gyro_2['Time'] >= start) & (proc_gyro_2['Time'] <= stop)].assign(Trial=trial))
+    accel_tdata_2 = pd.concat(accel_trials, ignore_index=True)[['Trial', 'Time', 'X', 'Y', 'Z', 'Mag', 'X_lin', 'Y_lin', 'Z_lin', 'Mag_lin']]
     gyro_tdata_2 = pd.concat(gyro_trials, ignore_index=True)[['Trial', 'Time', 'X', 'Y', 'Z']]
     accel_tdata_2['Mag'] = np.sqrt(accel_tdata_2[['X', 'Y', 'Z']].pow(2).sum(axis = 1))
         
@@ -198,8 +209,8 @@ for subject_id in folders: #Collect recorded data of each participant
     EMG_21_diff.to_csv(os.path.join(end_subject_dir,'EMG_21_extrema.csv'), index=False, header=True)
     EMG_22_diff.to_csv(os.path.join(end_subject_dir,'EMG_22_extrema.csv'), index=False, header=True)
 
-    accel_diff, FF, Entropy = peak_analysis(start_times, start_times, accel[['Time', 'Mag']], save_path= os.path.join(end_subject_dir,'Graphs','accel_extrema'), plot_show = False, decimals = 2, units = "G")
-    accel_diff.to_csv(os.path.join(end_subject_dir,'accel_extrema.csv'), index=False, header=True)
+    accel_diff, FF, Entropy = peak_analysis(start_times, stop_times, accel[['Time', 'Mag']], save_path= os.path.join(end_subject_dir,'Graphs','accel_extrema'), plot_show = False, decimals = 2, units = "G")
+    accel_diff.to_csv(os.path.join(end_subject_dir,'accel_extrema_preprocessed.csv'), index=False, header=True)
  
     Measures.loc[0] = [EMG_11_FF, EMG_11_Entropy, EMG_12_FF, EMG_12_Entropy, EMG_21_FF, EMG_21_Entropy, EMG_22_FF, EMG_22_Entropy, FF, Entropy]
     Measures.to_csv(os.path.join(end_subject_dir,'Measures.csv'), index=False, header=True)

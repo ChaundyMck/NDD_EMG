@@ -157,6 +157,6 @@ def CFAR_threshold(feat, K, R, G, t_min = None, t_max = None):
     med = np.where(np.isan(med), fill, med)
     thr = K * med
     if t_min is not None or t_max is not None:
-        the = np.clip(thr, t_min if t_min is not None else -np.inf, t_max if t_max is not None else np.inf)
+        thr = np.clip(thr, t_min if t_min is not None else -np.inf, t_max if t_max is not None else np.inf)
     
     return thr
